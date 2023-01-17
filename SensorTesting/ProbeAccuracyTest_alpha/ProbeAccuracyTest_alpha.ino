@@ -54,7 +54,6 @@ void loop() {
     stepper.move(FWD*ONE_MM*MICROSTEPS);
     delay(500);
   }
-
   
   delay(1000);
     
