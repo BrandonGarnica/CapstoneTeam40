@@ -7,9 +7,10 @@
 #include "BasicStepperDriver.h"
 
 // Pins Defines
-#define DIR 2
-#define STEP 3
-#define PROBE A0
+#define PIN_DIR 2
+#define PIN_STEP 3
+#define PIN_PROBE A0
+#define PIN_BTN A1
 
 // Motor Defines
 #define MOTOR_STEPS 200
@@ -27,20 +28,22 @@
 
 // Variable Defines
 #define NUM_OF_TESTS 10
+#define NUM_OF_DATA NUM_OF_TESTS + 1
 #define TRIGGER_VAL 2.5
+#define RESET 0
+#define STEP_DATA_POS 0
 
 // Declarations
-BasicStepperDriver stepper(MOTOR_STEPS, DIR, STEP);
+BasicStepperDriver stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP);
 
 // Variables
-int stepData [NUM_OF_TESTS] = {}; // Init data point based on the number of tests
-int stepsTaken;                   // Steps taken by motor
-int probeValue;                   // Curren probeValue from Arduino through a voltage divider
+int stepData [NUM_OF_DATA] = {}; // Init data point based on the number of tests
 
 enum motor_States {
   init_st,        // Init SM
-  reset_st,       // Reset state, inital probe of tote
-  probe_st,       // Probes totes X # of times
+  wait_st,        // Wait here until BTN press
+  init_probe_st,  // Inital probe of tote
+  probing_st,     // Probes totes X # of times
   calculate_st,   // Calculate steps to MM & accuracy & precision
   write_st,       // Write results to txt file
 } current_State;
@@ -48,15 +51,63 @@ enum motor_States {
 // Standard tick function
 void clockControl_tick() {
 
+  int stepsTaken;                                             // Steps taken by motor
+  int dataEntry;
+  // Obtain probe value every tick
+  int probeValue = map(analogRead(PIN_PROBE), 0, 1023, 0, 5); // Map the probe analogue value to a 0 - 5
+
   switch (current_State) { // Transition Actions
 
     case init_st:
+      // Transition to wait st
+      current_State = wait_st;
+      break;
+      
+    case wait_st:
+      // Transition to init_probe_st when BTN is pressed
+      if (PIN_BTN == HIGH) {
+        // Move stepper back to home
+        stepper.move(BKWD*FULL_TURN*MICROSTEPS);
+        current_State = init_probe_st;
+      }
       break;
 
-    case reset_st:
+    case init_probe_st:
+      // Transition when probe has been triggered
+      if (probeValue >= TRIGGER_VAL) {
+        // Store steps taken
+        stepData[dataEntry++] = stepsTaken;
+        stepsTaken = RESET;
+        current_State = probing_st;
+      }
+      // Increment steps by one mm
+      stepsTaken += ONE_MM;
+      // Increment motor forward by one 1mm
+      stepper.move(FWD*ONE_MM*MICROSTEPS);
       break;
 
-    case probe_st:
+    case probing_st:
+      // Transition when dateEntry has been reached
+      if(dataEntry == NUM_OF_DATA) {
+        stepsTaken = RESET;
+        // Move stepper back
+        stepper.move(BKWD*FULL_TURN*MICROSTEPS);
+        current_State = calculate_st;
+      }
+      // Store data when probe has been triggered
+      else if (probeValue >= TRIGGER_VAL) {
+        // Store steps taken
+        stepData[dataEntry++] = stepsTaken;
+        stepsTaken = RESET;
+        // Move stepper back
+        stepper.move(BKWD*FULL_TURN*MICROSTEPS);
+      }
+      else {
+        // Increment steps by one mm
+        stepsTaken += ONE_MM;
+        // Increment motor forward by one 1mm
+        stepper.move(FWD*ONE_MM*MICROSTEPS);
+      }
       break;
 
     case calculate_st:
@@ -72,12 +123,19 @@ void clockControl_tick() {
   switch (current_State) { // State Actions
 
     case init_st:
+      // Reset variables
+      dataEntry = RESET;
+      stepsTaken = RESET;
+      probeValue = RESET;
+      break;
+      
+    case wait_st:
       break;
 
-    case reset_st:
+    case init_probe_st:
       break;
 
-    case probe_st:
+    case probing_st:
       break;
 
     case calculate_st:
@@ -92,4 +150,11 @@ void clockControl_tick() {
 }
 
 // Call this before you call clockControl_tick().
-void clockControl_init() { current_State = init_st; }
+void clockControl_init() { 
+  // Setting Pins as inputs
+  pinMode(PIN_PROBE, INPUT);
+  pinMode(PIN_BTN, INPUT);
+
+  // Init SM
+  current_State = init_st;
+}
