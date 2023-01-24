@@ -9,8 +9,8 @@
 // Pins Defines
 #define PIN_DIR 2
 #define PIN_STEP 3
+#define PIN_BTN 10
 #define PIN_PROBE A0
-#define PIN_BTN A1
 
 // Motor Defines
 #define MOTOR_STEPS 200
@@ -34,6 +34,12 @@
 #define STEP_DATA_POS 0
 
 // Declarations
+
+int stepsTaken;                                             // Steps taken by motor
+int dataEntry;
+int probeValue;
+int buttonState = 0;
+
 BasicStepperDriver stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP);
 
 // Variables
@@ -49,13 +55,10 @@ enum motor_States {
 } current_State;
 
 // Standard tick function
-void clockControl_tick() {
-
-  int stepsTaken;                                             // Steps taken by motor
-  int dataEntry;
-  // Obtain probe value every tick
-  int probeValue = map(analogRead(PIN_PROBE), 0, 1023, 0, 5); // Map the probe analogue value to a 0 - 5
-
+void motorControl_tick() {
+  
+  probeValue = map(analogRead(PIN_PROBE), 0, 1023, 0, 5); // Map the probe analogue value to a 0 - 5
+  buttonState = digitalRead(PIN_BTN);
   switch (current_State) { // Transition Actions
 
     case init_st:
@@ -65,7 +68,7 @@ void clockControl_tick() {
       
     case wait_st:
       // Transition to init_probe_st when BTN is pressed
-      if (PIN_BTN == HIGH) {
+      if (buttonState == LOW) {
         // Move stepper back to home
         stepper.move(BKWD*FULL_TURN*MICROSTEPS);
         current_State = init_probe_st;
@@ -81,9 +84,9 @@ void clockControl_tick() {
         current_State = probing_st;
       }
       // Increment steps by one mm
-      stepsTaken += ONE_MM;
+      stepsTaken += MOVE_ONE_MM;
       // Increment motor forward by one 1mm
-      stepper.move(FWD*ONE_MM*MICROSTEPS);
+      stepper.move(FWD*MOVE_ONE_MM*MICROSTEPS);
       break;
 
     case probing_st:
@@ -104,9 +107,9 @@ void clockControl_tick() {
       }
       else {
         // Increment steps by one mm
-        stepsTaken += ONE_MM;
+        stepsTaken += MOVE_ONE_MM;
         // Increment motor forward by one 1mm
-        stepper.move(FWD*ONE_MM*MICROSTEPS);
+        stepper.move(FWD*MOVE_ONE_MM*MICROSTEPS);
       }
       break;
 
@@ -133,6 +136,7 @@ void clockControl_tick() {
       break;
 
     case init_probe_st:
+
       break;
 
     case probing_st:
@@ -150,11 +154,13 @@ void clockControl_tick() {
 }
 
 // Call this before you call clockControl_tick().
-void clockControl_init() { 
+void motorControl_init() { 
+  stepper.begin(RPM, MICROSTEPS);
+  pinMode(LED_BUILTIN, OUTPUT);
   // Setting Pins as inputs
   pinMode(PIN_PROBE, INPUT);
-  pinMode(PIN_BTN, INPUT);
-
+  pinMode(PIN_BTN, INPUT_PULLUP);
+    
   // Init SM
   current_State = init_st;
 }
