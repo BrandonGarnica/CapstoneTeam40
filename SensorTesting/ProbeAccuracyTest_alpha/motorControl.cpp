@@ -10,8 +10,8 @@
 // Pins Defines
 #define PIN_DIR 2
 #define PIN_STEP 3
-#define PIN_BTN 10
-#define PIN_PROBE A0
+#define PIN_PROBE 4
+#define PIN_BTN 5
 
 // Motor Defines
 #define MOTOR_STEPS 200
