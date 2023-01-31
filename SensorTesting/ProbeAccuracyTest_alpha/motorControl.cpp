@@ -5,6 +5,7 @@
 
 #include "motorControl.h"
 #include "BasicStepperDriver.h"
+#include "textWrite.h"
 
 // Pins Defines
 #define PIN_DIR 2
@@ -22,7 +23,7 @@
 // Movement Defines
 #define FULL_TURN MOTOR_STEPS         // 200 steps ~ 8mm
 #define HALF_TURN MOTOR_STEPS / 2     // 100 steps ~ 4mm
-#define QUATER_TURN MOTOR_STEPS / 4   // 50 steps ~ 2mm
+#define QUARTER_TURN MOTOR_STEPS / 4   // 50 steps ~ 2mm
 #define MOVE_ONE_MM MOTOR_STEPS / 8   // 25 steps ~ 1mm
 #define MOVE_ONE_STEP 1               // 1 step ~ 40um
 
@@ -114,7 +115,8 @@ void motorControl_tick() {
       break;
 
     case calculate_st:
-      break;
+        calcData()
+        break;
 
     case write_st:
       break;
