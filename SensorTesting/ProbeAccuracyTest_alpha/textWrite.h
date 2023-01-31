@@ -3,7 +3,7 @@
 
 
 void calcData(int stepData[11]);
-void writeDataToFile();
+void writeDataToFile(int stepData[11]);
 
 
 #endif //PROBEACCURACYTEST_ALPHA_TEXTWRITE_H
