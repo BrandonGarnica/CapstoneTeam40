@@ -58,7 +58,7 @@ enum motor_States {
 // Standard tick function
 void motorControl_tick() {
   
-  probeValue = map(analogRead(PIN_PROBE), 0, 1023, 0, 5); // Map the probe analogue value to a 0 - 5
+  probeValue = digitalRead(PIN_PROBE); // Map the probe analogue value to a 0 - 5
   buttonState = digitalRead(PIN_BTN);
   switch (current_State) { // Transition Actions
 
@@ -78,7 +78,7 @@ void motorControl_tick() {
 
     case init_probe_st:
       // Transition when probe has been triggered
-      if (probeValue >= TRIGGER_VAL) {
+      if (probeValue == LOW) {
         // Store steps taken
         stepData[dataEntry++] = stepsTaken;
         stepsTaken = RESET;
@@ -99,7 +99,7 @@ void motorControl_tick() {
         current_State = calculate_st;
       }
       // Store data when probe has been triggered
-      else if (probeValue >= TRIGGER_VAL) {
+      else if (probeValue == LOW) {
         // Store steps taken
         stepData[dataEntry++] = stepsTaken;
         stepsTaken = RESET;
@@ -115,7 +115,7 @@ void motorControl_tick() {
       break;
 
     case calculate_st:
-        calcData()
+        calcData(stepData);
         break;
 
     case write_st:
