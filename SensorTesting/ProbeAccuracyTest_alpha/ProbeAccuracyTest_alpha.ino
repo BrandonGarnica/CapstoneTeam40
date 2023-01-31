@@ -4,6 +4,7 @@
 void setup() {
   // Init SM
   motorControl_init();
+  Serial.begin(9600);
 }
 
 void loop() {
