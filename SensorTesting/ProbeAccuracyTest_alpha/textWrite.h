@@ -1,8 +1,9 @@
-//
-// Created by micha on 1/23/2023.
-//
-
 #ifndef PROBEACCURACYTEST_ALPHA_TEXTWRITE_H
 #define PROBEACCURACYTEST_ALPHA_TEXTWRITE_H
+
+
+void calcData(int stepData[11]);
+void writeDataToFile();
+
 
 #endif //PROBEACCURACYTEST_ALPHA_TEXTWRITE_H
