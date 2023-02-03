@@ -30,26 +30,15 @@
 #define MOVE_BY_X MOVE_ONE_STEP       // Step movement when probing
 
 // Variable Defines
-#define NUM_OF_TESTS 9
-#define NUM_OF_DATA NUM_OF_TESTS + 1
+#define NUM_OF_TESTS 10
+#define NUM_OF_DATA NUM_OF_TESTS - 1
 #define TRIGGER_VAL 2.5
 #define RESET 0
 #define STEP_DATA_POS 0
 #define DELAY_POST_PROBE 250
 #define DELAY_PROBING 10
 
-// Declarations
-
-int stepsTaken;   // Steps taken by motor
-int dataEntry;    // Keeps track of data entry #
-int probeState;   // Tracks probe state
-int buttonState;  // Tracks button state
-
-BasicStepperDriver stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP);
-
-// Variables
-int stepData [NUM_OF_DATA] = {}; // Init data point based on the number of tests
-
+// SM Declaration
 enum motor_States {
   init_st,        // Init SM
   wait_st,        // Wait here until BTN press
@@ -58,11 +47,42 @@ enum motor_States {
   write_st,       // Write results to serial monitor of arduino
 } current_State;
 
+// Stepper Declaration
+BasicStepperDriver stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP);
+
+// Variables
+int stepsTaken;                   // Steps taken by motor
+int dataEntry;                    // Keeps track of data entry #
+int stepData [NUM_OF_DATA] = {};  // Init data point based on the number of tests
+
+// Inits SM & Variables used
+void motorControl_init() { 
+  // Init stepper
+  stepper.begin(RPM, MICROSTEPS);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  // Setting Pins as inputs
+  pinMode(PIN_PROBE, INPUT);
+  pinMode(PIN_BTN, INPUT_PULLUP);
+    
+  // Init SM
+  current_State = init_st;
+}
+
+// Returns button state
+bool motorControl_buttonState() { return digitalRead(PIN_BTN); }
+
+// Returns button state
+bool motorControl_probeState() { return digitalRead(PIN_PROBE); } // Probe is set as NO (HIGH = 5V, LOW = 0V)
+
+// Helper function for moving the motor
+void motorControl_moveMotor(int direction, int numOfSteps, int microsteps = 1, int delayMS = 250) {
+  stepper.move(direction*numOfSteps*microsteps);
+  delay(delayMS);
+}
+
 // Standard tick function
 void motorControl_tick() {
-  
-  probeState = digitalRead(PIN_PROBE); // Map the probe analogue value to a 0 - 5
-  buttonState = digitalRead(PIN_BTN);
 
   switch (current_State) { // Transition Actions
 
@@ -72,53 +92,50 @@ void motorControl_tick() {
       break;
       
     case wait_st:
-      // Transition to init_probe_st when BTN is pressed
-      if (buttonState == LOW) {
-        // Move stepper back to home
-        stepper.move(BKWD*HALF_TURN*MICROSTEPS);
-        delay(DELAY_POST_PROBE);
+      // Transition to init_probe_st when BS is low
+      if (!motorControl_buttonState()) {
+        // Move stepper back for initial probing
+        motorControl_moveMotor(BKWD, HALF_TURN, MICROSTEPS, DELAY_POST_PROBE);
         current_State = init_probe_st;
       }
       break;
 
     case init_probe_st:
       // Transition when probe has been triggered
-      if (probeState == HIGH) {
+      if (motorControl_probeState()) {
         // Move stepper back to home
-        stepper.move(BKWD*FULL_TURN*MICROSTEPS);
-        delay(DELAY_POST_PROBE);
+        motorControl_moveMotor(BKWD, FULL_TURN, MICROSTEPS, DELAY_POST_PROBE);
         current_State = probing_st;
       }
-      // Increment motor forward by one 1mm
-      stepper.move(FWD*MOVE_BY_X*MICROSTEPS);
-      delay(DELAY_PROBING);
+      // Increment motor forward
+      motorControl_moveMotor(FWD, MOVE_BY_X, MICROSTEPS, DELAY_PROBING);
       break;
 
     case probing_st:
       // Transition when dateEntry has been reached
       if(dataEntry == NUM_OF_DATA) {
+        // Reset steps taken
         stepsTaken = RESET;
         current_State = write_st;
       }
       // Store data when probe has been triggered
-      else if (probeState == HIGH) {
+      else if (motorControl_probeState()) {
         // Store steps taken
         stepData[dataEntry++] = stepsTaken;
-        // Move stepper back
-        stepper.move(BKWD*stepsTaken*MICROSTEPS);
-        delay(DELAY_POST_PROBE);
+        // Move stepper back by amount of steps taken
+        motorControl_moveMotor(BKWD, stepsTaken, MICROSTEPS, DELAY_POST_PROBE);
         stepsTaken = RESET;
       }
       else {
-        // Increment steps by one mm
+        // Increment steps taken
         stepsTaken += MOVE_BY_X;
-        // Increment motor forward by one 1mm
-        stepper.move(FWD*MOVE_BY_X*MICROSTEPS);
-        delay(DELAY_PROBING);
+        // Increment motor forward
+        motorControl_moveMotor(FWD, MOVE_BY_X, MICROSTEPS, DELAY_PROBING);
       }
       break;
 
     case write_st:
+        // Write data to serial monitor
         calcData(stepData);
         current_State = init_st;
         break;
@@ -133,8 +150,6 @@ void motorControl_tick() {
       // Reset variables
       dataEntry = RESET;
       stepsTaken = RESET;
-      probeState = RESET;
-      buttonState = RESET;
       break;
       
     case wait_st:
@@ -156,18 +171,4 @@ void motorControl_tick() {
     default:
       break;
   }
-}
-
-// Call this before you call clockControl_tick().
-void motorControl_init() { 
-  // Init stepper
-  stepper.begin(RPM, MICROSTEPS);
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  // Setting Pins as inputs
-  pinMode(PIN_PROBE, INPUT);
-  pinMode(PIN_BTN, INPUT_PULLUP);
-    
-  // Init SM
-  current_State = init_st;
 }
