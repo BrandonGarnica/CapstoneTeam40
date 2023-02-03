@@ -1,9 +1,9 @@
 #ifndef PROBEACCURACYTEST_ALPHA_TEXTWRITE_H
 #define PROBEACCURACYTEST_ALPHA_TEXTWRITE_H
 
+void calcData(int stepData[9]);
 
-void calcData(int stepData[11]);
-void writeDataToFile(int stepData[11]);
-
+// Write data to serial monitor
+void writeSerialMonitor(int stepData[9]);
 
 #endif //PROBEACCURACYTEST_ALPHA_TEXTWRITE_H
