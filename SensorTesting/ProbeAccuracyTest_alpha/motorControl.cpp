@@ -31,7 +31,7 @@
 
 // Variable Defines
 #define NUM_OF_TESTS 10
-#define NUM_OF_DATA NUM_OF_TESTS - 1
+#define NUM_OF_DATA NUM_OF_TESTS
 #define TRIGGER_VAL 2.5
 #define RESET 0
 #define STEP_DATA_POS 0
@@ -72,10 +72,10 @@ void motorControl_init() {
 // Returns button state
 bool motorControl_buttonState() { return digitalRead(PIN_BTN); }
 
-// Returns button state
+// Returns probe state
 bool motorControl_probeState() { return digitalRead(PIN_PROBE); } // Probe is set as NO (HIGH = 5V, LOW = 0V)
 
-// Helper function for moving the motor
+// Helper function for moving stepper motor
 void motorControl_moveMotor(int direction, int numOfSteps, int microsteps = 1, int delayMS = 250) {
   stepper.move(direction*numOfSteps*microsteps);
   delay(delayMS);
@@ -113,7 +113,8 @@ void motorControl_tick() {
 
     case probing_st:
       // Transition when dateEntry has been reached
-      if(dataEntry == NUM_OF_DATA) {
+      if(dataEntry >= NUM_OF_TESTS) {
+        stepData[dataEntry] = stepsTaken;
         // Reset steps taken
         stepsTaken = RESET;
         current_State = write_st;
