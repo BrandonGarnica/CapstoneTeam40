@@ -7,7 +7,7 @@
 #include "motorControl.h"
 #include "textWrite.h"
 
-// Pins Defines
+// Arduino Pins Defines
 #define PIN_DIR 2
 #define PIN_STEP 3
 #define PIN_PROBE 4
@@ -61,7 +61,7 @@ void motorControl_init() {
   stepper.begin(RPM, MICROSTEPS);
   pinMode(LED_BUILTIN, OUTPUT);
 
-  // Setting Pins as inputs
+  // Init PINS on arduino
   pinMode(PIN_PROBE, INPUT);
   pinMode(PIN_BTN, INPUT_PULLUP);
     
@@ -81,7 +81,7 @@ void motorControl_moveMotor(int direction, int numOfSteps, int microsteps = 1, i
   delay(delayMS);
 }
 
-// Standard tick function
+// Motor Control tick function
 void motorControl_tick() {
 
   switch (current_State) { // Transition Actions
@@ -92,7 +92,7 @@ void motorControl_tick() {
       break;
       
     case wait_st:
-      // Transition to init_probe_st when BS is low
+      // Transition to when bs is LOW
       if (!motorControl_buttonState()) {
         // Move stepper back for initial probing
         motorControl_moveMotor(BKWD, HALF_TURN, MICROSTEPS, DELAY_POST_PROBE);
@@ -101,9 +101,9 @@ void motorControl_tick() {
       break;
 
     case init_probe_st:
-      // Transition when probe has been triggered
+      // Transition when probe is HIGH
       if (motorControl_probeState()) {
-        // Move stepper back to home
+        // Move stepper back for multi probe
         motorControl_moveMotor(BKWD, FULL_TURN, MICROSTEPS, DELAY_POST_PROBE);
         current_State = probing_st;
       }
@@ -112,10 +112,10 @@ void motorControl_tick() {
       break;
 
     case probing_st:
-      // Transition when dateEntry has been reached
+      // Transition when # of test has been reached
       if(dataEntry >= NUM_OF_TESTS) {
         stepData[dataEntry] = stepsTaken;
-        // Reset steps taken
+        // Reset steps taken for next test
         stepsTaken = RESET;
         current_State = write_st;
       }
@@ -125,6 +125,7 @@ void motorControl_tick() {
         stepData[dataEntry++] = stepsTaken;
         // Move stepper back by amount of steps taken
         motorControl_moveMotor(BKWD, stepsTaken, MICROSTEPS, DELAY_POST_PROBE);
+        // Reset steps taken for next test
         stepsTaken = RESET;
       }
       else {
@@ -137,7 +138,7 @@ void motorControl_tick() {
 
     case write_st:
         // Write data to serial monitor
-        calcData(stepData);
+        writeSerialMonitor(stepData);
         current_State = init_st;
         break;
 
