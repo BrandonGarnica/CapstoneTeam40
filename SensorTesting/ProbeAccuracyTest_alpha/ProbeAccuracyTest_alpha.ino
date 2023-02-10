@@ -8,5 +8,6 @@ void setup() {
 }
 
 void loop() {
+  // Tick SM
   motorControl_tick();
 }
