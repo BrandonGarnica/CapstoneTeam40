@@ -11,7 +11,7 @@ bool motorControl_buttonState();
 bool motorControl_probeState();
 
 // Helper function for moving the motor
-void motorControl_moveMotor(int direction, int numOfSteps, int microsteps, int delay);
+void motorControl_moveMotor(int direction, int rpm, int numOfSteps, int microsteps, int delay);
 
 // Standard tick function.
 void motorControl_tick();

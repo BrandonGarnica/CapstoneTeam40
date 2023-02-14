@@ -15,7 +15,9 @@
 
 // Motor Defines
 #define MOTOR_STEPS 200
-#define RPM 60
+#define RPM_PROBING 60
+#define RPM_MOVING 30
+#define RPM_DEFAULT 30
 #define MICROSTEPS 1
 #define FWD 1
 #define BKWD -1
@@ -35,15 +37,16 @@
 #define TRIGGER_VAL 2.5
 #define RESET 0
 #define STEP_DATA_POS 0
-#define DELAY_POST_PROBE 250
-#define DELAY_PROBING 10
+#define DELAY_DEFAULT 250
+#define DELAY_POST_PROBE 10
+#define DELAY_PROBING 25
 
 // SM Declaration
 enum motor_States {
   init_st,        // Init SM
   wait_st,        // Wait here until BTN press
-  init_probe_st,  // Inital probe of tote
-  probing_st,     // Probes totes X # of times
+  backup_st,      // Inital probe of tote
+  forward_st,     // Probes totes X # of times
   write_st,       // Write results to serial monitor of arduino
 } current_State;
 
@@ -51,14 +54,17 @@ enum motor_States {
 BasicStepperDriver stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP);
 
 // Variables
-int stepsTaken;                   // Steps taken by motor
+bool firstProbe = true;           // Variable to track if its the first probe of the test
+
+int stepsTakenFWD;                // Steps taken FWD by motor
+int stepsTakenBKWD;               // Steps taken BKWD by motor
 int dataEntry;                    // Keeps track of data entry #
 int stepData [NUM_OF_DATA] = {};  // Init data point based on the number of tests
 
 // Inits SM & Variables used
 void motorControl_init() { 
   // Init stepper
-  stepper.begin(RPM, MICROSTEPS);
+  stepper.begin(RPM_DEFAULT, MICROSTEPS);
   pinMode(LED_BUILTIN, OUTPUT);
 
   // Init PINS on arduino
@@ -76,7 +82,8 @@ bool motorControl_buttonState() { return digitalRead(PIN_BTN); }
 bool motorControl_probeState() { return digitalRead(PIN_PROBE); } // Probe is set as NO (HIGH = 5V, LOW = 0V)
 
 // Helper function for moving stepper motor
-void motorControl_moveMotor(int direction, int numOfSteps, int microsteps = 1, int delayMS = 250) {
+void motorControl_moveMotor(int direction, int numOfSteps, int rpm = RPM_MOVING, int microsteps = MICROSTEPS, int delayMS = DELAY_DEFAULT) {
+  stepper.begin(rpm, microsteps);
   stepper.move(direction*numOfSteps*microsteps);
   delay(delayMS);
 }
@@ -92,55 +99,58 @@ void motorControl_tick() {
       break;
       
     case wait_st:
-      // Transition to when bs is LOW
+      // Transition to when BNT is LOW
       if (!motorControl_buttonState()) {
-        // Move stepper back for initial probing
-        motorControl_moveMotor(BKWD, HALF_TURN, MICROSTEPS, DELAY_POST_PROBE);
-        current_State = init_probe_st;
+        current_State = backup_st;
       }
       break;
 
-    case init_probe_st:
-      // Transition when probe is HIGH
-      if (motorControl_probeState()) {
-        // Move stepper back for multi probe
-        motorControl_moveMotor(BKWD, FULL_TURN, MICROSTEPS, DELAY_POST_PROBE);
-        current_State = probing_st;
+    case backup_st:
+      // Transition when probe is LOW
+      if (!motorControl_probeState()) {
+        Serial.print("stepsTakenBKWD: ");
+        Serial.print(stepsTakenBKWD);
+        Serial.print("\n");
+        firstProbe = false;   // No longer first probe
+        delay(500);           // Waiting for signal to settle
+        current_State = forward_st;
       }
-      // Increment motor forward
-      motorControl_moveMotor(FWD, MOVE_BY_X, MICROSTEPS, DELAY_PROBING);
+      // Need to obtain position from box on the first probe
+      if(firstProbe){
+        stepsTakenBKWD += MOVE_BY_X;
+      }
+      // Increment motor BKWDs
+      motorControl_moveMotor(BKWD, MOVE_BY_X, RPM_PROBING, MICROSTEPS, DELAY_PROBING);
       break;
 
-    case probing_st:
+    case forward_st:
       // Transition when # of test has been reached
       if(dataEntry >= NUM_OF_TESTS) {
-        stepData[dataEntry] = stepsTaken;
-        // Reset steps taken for next test
-        stepsTaken = RESET;
+        // Move stepper back by amount of steps taken back in first probe
+        motorControl_moveMotor(FWD, stepsTakenBKWD, RPM_MOVING,  MICROSTEPS, DELAY_POST_PROBE);
+        // Store data
+        stepData[dataEntry] = stepsTakenBKWD - stepsTakenFWD;
         current_State = write_st;
       }
       // Store data when probe has been triggered
       else if (motorControl_probeState()) {
-        // Store steps taken
-        stepData[dataEntry++] = stepsTaken;
-        // Move stepper back by amount of steps taken
-        motorControl_moveMotor(BKWD, stepsTaken, MICROSTEPS, DELAY_POST_PROBE);
-        // Reset steps taken for next test
-        stepsTaken = RESET;
+        // Store diff. between first probe and current probe
+        stepData[dataEntry++] = stepsTakenBKWD - stepsTakenFWD;
+        delay(500);   // Wait for signal to settle
+        current_State = backup_st;
       }
       else {
-        // Increment steps taken
-        stepsTaken += MOVE_BY_X;
+        stepsTakenFWD += MOVE_BY_X;
         // Increment motor forward
-        motorControl_moveMotor(FWD, MOVE_BY_X, MICROSTEPS, DELAY_PROBING);
+        motorControl_moveMotor(FWD, MOVE_BY_X, RPM_PROBING, MICROSTEPS, DELAY_PROBING);
       }
       break;
 
     case write_st:
-        // Write data to serial monitor
-        writeSerialMonitor(stepData);
-        current_State = init_st;
-        break;
+      // Write data to serial monitor
+      writeSerialMonitor(stepData);
+      current_State = init_st;
+      break;
 
     default:
       break;
@@ -151,23 +161,28 @@ void motorControl_tick() {
     case init_st:
       // Reset variables
       dataEntry = RESET;
-      stepsTaken = RESET;
+      stepsTakenFWD = RESET;
+      stepsTakenBKWD = RESET;
+      firstProbe = true;
       break;
       
     case wait_st:
       // Do nothing...
       break;
 
-    case init_probe_st:
-      // Do nothing...
+    case backup_st:
+        // Reset steps taken for next test
+      stepsTakenFWD = RESET;
       break;
 
-    case probing_st:
-      // Do nothing...
+    case forward_st:
+        // Increment steps taken
+        stepsTakenFWD += MOVE_BY_X;
       break;
 
     case write_st:
-      // Do nothing...
+        // Reset steps taken for next test
+      stepsTakenFWD = RESET;
       break;
 
     default:
