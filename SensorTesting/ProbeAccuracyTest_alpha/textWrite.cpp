@@ -13,9 +13,6 @@
 void writeSerialMonitor(int stepData[NUM_OF_DATA]) {
   for(int i = INIT_VAR; i < NUM_OF_TESTS; i++) {
     Serial.print(stepData[i]);
-    //Serial.print(" (");
-    //Serial.print(calcDistance(stepData[i]), SIG_FIGS);
-    //Serial.print("mm)");
     Serial.print("\n");
   }
   Serial.print("\n");
