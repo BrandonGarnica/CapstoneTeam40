@@ -10,14 +10,15 @@
 // Arduino Pins Defines
 #define PIN_DIR 2
 #define PIN_STEP 3
-#define PIN_PROBE 4
+#define PIN_PROBE 0
 #define PIN_BTN 5
 
 // Motor Defines
 #define MOTOR_STEPS 200
-#define RPM_PROBING 60
+#define RPM_PROBING 30
 #define RPM_MOVING 30
 #define RPM_DEFAULT 30
+#define RPM_RESET 60
 #define MICROSTEPS 1
 #define FWD 1
 #define BKWD -1
@@ -40,6 +41,7 @@
 #define DELAY_DEFAULT 250
 #define DELAY_POST_PROBE 10
 #define DELAY_PROBING 25
+#define MIN_PROBE_DISTANCE 100
 
 // SM Declaration
 enum motor_States {
@@ -58,6 +60,8 @@ bool firstProbe = true;           // Variable to track if its the first probe of
 
 int stepsTakenFWD;                // Steps taken FWD by motor
 int stepsTakenBKWD;               // Steps taken BKWD by motor
+int sensorLowPosition;
+int sensorHighPosition;
 int dataEntry;                    // Keeps track of data entry #
 int stepData [NUM_OF_DATA] = {};  // Init data point based on the number of tests
 
@@ -79,7 +83,8 @@ void motorControl_init() {
 bool motorControl_buttonState() { return digitalRead(PIN_BTN); }
 
 // Returns probe state
-bool motorControl_probeState() { return digitalRead(PIN_PROBE); } // Probe is set as NO (HIGH = 5V, LOW = 0V)
+// bool motorControl_probeState() { return digitalRead(PIN_PROBE); } // Probe is set as NO (HIGH = 5V, LOW = 0V)
+bool motorControl_probeState() { return analogRead(0) > MIN_PROBE_DISTANCE ? 0:1; } // Probe is set as NO (HIGH = 5V, LOW = 0V)
 
 // Helper function for moving stepper motor
 void motorControl_moveMotor(int direction, int numOfSteps, int rpm = RPM_MOVING, int microsteps = MICROSTEPS, int delayMS = DELAY_DEFAULT) {
@@ -106,41 +111,52 @@ void motorControl_tick() {
       break;
 
     case backup_st:
-      // Transition when probe is LOW
-      if (!motorControl_probeState()) {
-        Serial.print("stepsTakenBKWD: ");
-        Serial.print(stepsTakenBKWD);
-        Serial.print("\n");
-        firstProbe = false;   // No longer first probe
-        delay(500);           // Waiting for signal to settle
-        current_State = forward_st;
-      }
       // Need to obtain position from box on the first probe
-      if(firstProbe){
-        stepsTakenBKWD += MOVE_BY_X;
+      if(firstProbe) {
+        // Transition when probe is LOW
+        if (!motorControl_probeState()) {
+          firstProbe = false;   // No longer the first probe
+          delay(500);           // Waiting for signal to settle
+          current_State = forward_st;
+        }
+        sensorLowPosition += MOVE_BY_X;
+        // Increment motor BKWDs
+        motorControl_moveMotor(BKWD, MOVE_BY_X, RPM_PROBING, MICROSTEPS, DELAY_PROBING);
       }
-      // Increment motor BKWDs
-      motorControl_moveMotor(BKWD, MOVE_BY_X, RPM_PROBING, MICROSTEPS, DELAY_PROBING);
+      // When it's not the first probe...
+      if(!firstProbe) {
+        if(!motorControl_probeState() && (stepsTakenBKWD >= sensorHighPosition)){
+          motorControl_moveMotor(FWD, (stepsTakenBKWD - sensorHighPosition), RPM_PROBING, MICROSTEPS, DELAY_PROBING);
+          delay(500);   // Wait for signal to settle
+          sensorHighPosition = RESET;
+          stepsTakenBKWD = RESET;
+          current_State = forward_st;
+        } else {
+          stepsTakenBKWD += MOVE_BY_X;
+          // Increment motor BKWDs
+          motorControl_moveMotor(BKWD, MOVE_BY_X, RPM_PROBING, MICROSTEPS, DELAY_PROBING);
+        }
+      }
       break;
 
     case forward_st:
       // Transition when # of test has been reached
       if(dataEntry >= NUM_OF_TESTS) {
-        // Move stepper back by amount of steps taken back in first probe
-        motorControl_moveMotor(FWD, stepsTakenBKWD, RPM_MOVING,  MICROSTEPS, DELAY_POST_PROBE);
         // Store data
-        stepData[dataEntry] = stepsTakenBKWD - stepsTakenFWD;
+        stepData[dataEntry++] = sensorLowPosition - sensorHighPosition;
+        // Move stepper back by amount of steps taken back in first probe
+        motorControl_moveMotor(FWD, sensorLowPosition, RPM_RESET,  MICROSTEPS, DELAY_POST_PROBE);
         current_State = write_st;
       }
       // Store data when probe has been triggered
       else if (motorControl_probeState()) {
         // Store diff. between first probe and current probe
-        stepData[dataEntry++] = stepsTakenBKWD - stepsTakenFWD;
+        stepData[dataEntry++] = sensorLowPosition - sensorHighPosition;
         delay(500);   // Wait for signal to settle
         current_State = backup_st;
       }
       else {
-        stepsTakenFWD += MOVE_BY_X;
+        sensorHighPosition += MOVE_BY_X;
         // Increment motor forward
         motorControl_moveMotor(FWD, MOVE_BY_X, RPM_PROBING, MICROSTEPS, DELAY_PROBING);
       }
@@ -163,6 +179,8 @@ void motorControl_tick() {
       dataEntry = RESET;
       stepsTakenFWD = RESET;
       stepsTakenBKWD = RESET;
+      sensorHighPosition = RESET;
+      sensorLowPosition = RESET;
       firstProbe = true;
       break;
       
@@ -171,17 +189,16 @@ void motorControl_tick() {
       break;
 
     case backup_st:
-        // Reset steps taken for next test
-      stepsTakenFWD = RESET;
+      // Do nothing...
       break;
 
     case forward_st:
-        // Increment steps taken
-        stepsTakenFWD += MOVE_BY_X;
+      // Increment steps taken
+      stepsTakenFWD += MOVE_BY_X;
       break;
 
     case write_st:
-        // Reset steps taken for next test
+      // Reset steps taken for next test
       stepsTakenFWD = RESET;
       break;
 
