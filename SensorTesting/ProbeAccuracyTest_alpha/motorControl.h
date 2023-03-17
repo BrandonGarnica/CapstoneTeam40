@@ -4,6 +4,9 @@
 // Call this before you call clockControl_tick().
 void motorControl_init();
 
+// Maps the input analog to a voltage output
+float motorControl_mapInput(float analogInput);
+
 // Returns button state
 bool motorControl_buttonState();
 

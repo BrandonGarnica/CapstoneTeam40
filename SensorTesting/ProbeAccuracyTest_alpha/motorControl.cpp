@@ -16,7 +16,7 @@
 // Motor Defines
 #define MOTOR_STEPS 200
 #define RPM_PROBING 30
-#define RPM_MOVING 30
+#define RPM_MOVING 60
 #define RPM_DEFAULT 30
 #define RPM_RESET 60
 #define MICROSTEPS 1
@@ -42,6 +42,7 @@
 #define DELAY_POST_PROBE 10
 #define DELAY_PROBING 25
 #define MIN_PROBE_DISTANCE 100
+#define ANALOG_VOLT_100MM 0.681
 
 // SM Declaration
 enum motor_States {
@@ -65,6 +66,12 @@ int sensorHighPosition;
 int dataEntry;                    // Keeps track of data entry #
 int stepData [NUM_OF_DATA] = {};  // Init data point based on the number of tests
 
+float range;
+float lowVolt = 0.07;
+float highVolt = 4.467;
+float lowAnalog = 20.000;
+float highAnalog = 970.0;
+
 // Inits SM & Variables used
 void motorControl_init() { 
   // Init stepper
@@ -75,8 +82,16 @@ void motorControl_init() {
   pinMode(PIN_PROBE, INPUT);
   pinMode(PIN_BTN, INPUT_PULLUP);
     
+  // Init ultrasonic sensor range
+  range = (highVolt - lowVolt) / (highAnalog - lowAnalog);
+  
   // Init SM
   current_State = init_st;
+}
+
+// Maps the input analog to a voltage output
+float motorControl_mapInput(float analogInput) {
+  return (analogInput - lowAnalog) * range + lowVolt;
 }
 
 // Returns button state
@@ -84,7 +99,7 @@ bool motorControl_buttonState() { return digitalRead(PIN_BTN); }
 
 // Returns probe state
 // bool motorControl_probeState() { return digitalRead(PIN_PROBE); } // Probe is set as NO (HIGH = 5V, LOW = 0V)
-bool motorControl_probeState() { return analogRead(0) > MIN_PROBE_DISTANCE ? 0:1; } // Probe is set as NO (HIGH = 5V, LOW = 0V)
+bool motorControl_probeState() { return motorControl_mapInput(analogRead(0)) >= ANALOG_VOLT_100MM ? 1:0; } // Probe returns high when analog is above min
 
 // Helper function for moving stepper motor
 void motorControl_moveMotor(int direction, int numOfSteps, int rpm = RPM_MOVING, int microsteps = MICROSTEPS, int delayMS = DELAY_DEFAULT) {
@@ -113,8 +128,8 @@ void motorControl_tick() {
     case backup_st:
       // Need to obtain position from box on the first probe
       if(firstProbe) {
-        // Transition when probe is LOW
-        if (!motorControl_probeState()) {
+        // Transition when probe is HIGH
+        if (motorControl_probeState()) {
           firstProbe = false;   // No longer the first probe
           delay(500);           // Waiting for signal to settle
           current_State = forward_st;
@@ -125,7 +140,7 @@ void motorControl_tick() {
       }
       // When it's not the first probe...
       if(!firstProbe) {
-        if(!motorControl_probeState() && (stepsTakenBKWD >= sensorHighPosition)){
+        if(motorControl_probeState() && (stepsTakenBKWD >= sensorHighPosition)){
           motorControl_moveMotor(FWD, (stepsTakenBKWD - sensorHighPosition), RPM_PROBING, MICROSTEPS, DELAY_PROBING);
           delay(500);   // Wait for signal to settle
           sensorHighPosition = RESET;
@@ -149,16 +164,16 @@ void motorControl_tick() {
         current_State = write_st;
       }
       // Store data when probe has been triggered
-      else if (motorControl_probeState()) {
+      else if (!motorControl_probeState()) {
         // Store diff. between first probe and current probe
         stepData[dataEntry++] = sensorLowPosition - sensorHighPosition;
-        delay(500);   // Wait for signal to settle
+        delay(1000);   // Wait for signal to settle
         current_State = backup_st;
       }
       else {
         sensorHighPosition += MOVE_BY_X;
         // Increment motor forward
-        motorControl_moveMotor(FWD, MOVE_BY_X, RPM_PROBING, MICROSTEPS, DELAY_PROBING);
+        motorControl_moveMotor(FWD, MOVE_BY_X, RPM_MOVING, MICROSTEPS, DELAY_POST_PROBE);
       }
       break;
 
