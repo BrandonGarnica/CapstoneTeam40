@@ -12,10 +12,9 @@
 // Write data to serial monitor
 void writeSerialMonitor(int stepData[NUM_OF_DATA]) {
   for(int i = INIT_VAR; i < NUM_OF_TESTS; i++) {
-    Serial.print(stepData[i]);
-    Serial.print("\n");
+    Serial.println(stepData[i]);
   }
-  Serial.print("\n");
+  Serial.println("");
   return;
 };
 
