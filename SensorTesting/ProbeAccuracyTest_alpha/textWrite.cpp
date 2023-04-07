@@ -10,11 +10,11 @@
 #define SIG_FIGS 4
 
 // Write data to serial monitor
-void writeSerialMonitor(int stepData[NUM_OF_DATA]) {
+void writeSerialMonitor(int arr[NUM_OF_DATA]) {
   for(int i = INIT_VAR; i < NUM_OF_TESTS; i++) {
-    Serial.println(stepData[i]);
+    Serial.println(arr[i]);
   }
-  Serial.println("");
+  Serial.println();
   return;
 };
 
